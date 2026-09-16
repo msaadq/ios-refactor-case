@@ -24,33 +24,31 @@ protocol CityListViewModel {
 class CityListViewModelImpl: CityListViewModel {
     var cities: [City] = []
     var favorites: Set<String> = []
-    nonisolated(unsafe) var isLoading: Bool = false
+    var isLoading: Bool = false
 
     func loadCities() {
         Thread.printCurrentThreadInfo(prefix: "Loading cities")
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.isLoading = true
-            
-            self?.cities = [
-                City(name: "Oslo", lat: 59.91, lon: 10.75),
-                City(name: "Tokyo", lat: 35.68, lon: 139.69),
-                City(name: "Lisbon", lat: 38.72, lon: -9.14),
-                City(name: "New York", lat: 40.71, lon: -74.01),
-                City(name: "Sydney", lat: -33.87, lon: 151.21),
-                City(name: "Cairo", lat: 30.04, lon: 31.23),
-                City(name: "Moscow", lat: 55.75, lon: 37.62),
-                City(name: "Rio de Janeiro", lat: -22.91, lon: -43.17),
-                City(name: "Cape Town", lat: -33.92, lon: 18.42),
-                City(name: "Paris", lat: 48.85, lon: 2.35),
-                City(name: "Berlin", lat: 52.52, lon: 13.40),
-                City(name: "Madrid", lat: 40.42, lon: -3.70),
-                City(name: "Rome", lat: 41.90, lon: 12.49),
-                City(name: "Bangkok", lat: 13.75, lon: 100.51),
-                City(name: "Dubai", lat: 25.20, lon: 55.27)
-            ]
-            
-            self?.isLoading = false
-        }
+        isLoading = true
+
+        cities = [
+            City(name: "Oslo", lat: 59.91, lon: 10.75),
+            City(name: "Tokyo", lat: 35.68, lon: 139.69),
+            City(name: "Lisbon", lat: 38.72, lon: -9.14),
+            City(name: "New York", lat: 40.71, lon: -74.01),
+            City(name: "Sydney", lat: -33.87, lon: 151.21),
+            City(name: "Cairo", lat: 30.04, lon: 31.23),
+            City(name: "Moscow", lat: 55.75, lon: 37.62),
+            City(name: "Rio de Janeiro", lat: -22.91, lon: -43.17),
+            City(name: "Cape Town", lat: -33.92, lon: 18.42),
+            City(name: "Paris", lat: 48.85, lon: 2.35),
+            City(name: "Berlin", lat: 52.52, lon: 13.40),
+            City(name: "Madrid", lat: 40.42, lon: -3.70),
+            City(name: "Rome", lat: 41.90, lon: 12.49),
+            City(name: "Bangkok", lat: 13.75, lon: 100.51),
+            City(name: "Dubai", lat: 25.20, lon: 55.27)
+        ]
+
+        isLoading = false
     }
 
     func warmUpCache() async {
@@ -61,7 +59,18 @@ class CityListViewModelImpl: CityListViewModel {
 
     func fetchTemperature(for city: City, completion: @escaping @Sendable (Double?) -> Void) {
         isLoading = true
-        let url = URL(string: "https://api.open-meteo.com/v1/forecast?latitude=\(city.lat)&longitude=\(city.lon)&current=temperature_2m")!
+
+        var components = URLComponents(string: "https://api.open-meteo.com/v1/forecast")
+        components?.queryItems = [
+            URLQueryItem(name: "latitude", value: String(city.lat)),
+            URLQueryItem(name: "longitude", value: String(city.lon)),
+            URLQueryItem(name: "current", value: "temperature_2m")
+        ]
+        guard let url = components?.url else {
+            completion(nil)
+            return
+        }
+
         URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
             Thread.printCurrentThreadInfo(prefix: "Fetching temperature for \(city.name).")
 

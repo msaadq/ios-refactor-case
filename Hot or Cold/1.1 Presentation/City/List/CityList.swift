@@ -15,11 +15,6 @@ struct CityList: View {
     
     init(viewModel: CityListViewModel = CityListViewModelImpl()) {
         self.viewModel = viewModel
-        self.temperatures = temperatures
-    }
-    
-    init() {
-        self.init(viewModel: CityListViewModelImpl())
     }
     
     var body: some View {
