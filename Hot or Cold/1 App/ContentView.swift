@@ -8,11 +8,16 @@
 import SwiftUI
 
 struct ContentView: View {
+    let viewModel: CityListViewModel
+
     var body: some View {
-        CityList()
+        CityList(viewModel: viewModel)
     }
 }
 
 #Preview {
-    ContentView()
+    ContentView(viewModel: CityListViewModelImpl(
+        repository: CityRepository(dataSource: StubCityDataSource(), store: InMemoryFavoritesStore()),
+        temperatureProvider: TemperatureRepository(client: StubWeatherClient())
+    ))
 }

@@ -6,17 +6,15 @@
 //
 
 import SwiftUI
-import Combine
 
 struct CityList: View {
     @State private var viewModel: CityListViewModel
-    @State private var temperatures: [String: Double] = [:]
     @State private var searchQuery = ""
-    
-    init(viewModel: CityListViewModel = CityListViewModelImpl()) {
+
+    init(viewModel: CityListViewModel) {
         self.viewModel = viewModel
     }
-    
+
     var body: some View {
         NavigationStack {
             List {
@@ -27,26 +25,21 @@ struct CityList: View {
                         HStack {
                             Text(city.name)
                                 .font(.headline)
-                            
+
                             Spacer()
-                            
-                            if let t = temperatures[city.name] {
-                                Text("\(t, specifier: "%.1f")°")
+
+                            if let temperature = viewModel.temperature(for: city) {
+                                Text("\(temperature, specifier: "%.1f")°")
                             }
-                            
+
                             // TODO: I want this to be swipeable instead, so that I can swipe left on a city to reveal the favorite button.
                             Button(action: { viewModel.toggleFavorite(city) }) {
-                                Image(systemName: viewModel.favorites.contains(city.name) ? "star.fill" : "star")
+                                Image(systemName: viewModel.favorites.contains(city.id) ? "star.fill" : "star")
                             }
                         }
                     }
-                    .onAppear {
-                        viewModel.fetchTemperature(for: city) { temp in
-                            Thread.printCurrentThreadInfo(prefix: "Received temperature for \(city.name).")
-                            if let temp = temp {
-                                temperatures[city.name] = temp
-                            }
-                        }
+                    .task {
+                        await viewModel.fetchTemperature(for: city)
                     }
                 }
             }
@@ -56,7 +49,9 @@ struct CityList: View {
                 if viewModel.isLoading {
                     ProgressView()
                 } else {
-                    Button(action: viewModel.loadCities) {
+                    Button {
+                        Task { await viewModel.loadCities() }
+                    } label: {
                         Image(systemName: "arrow.counterclockwise")
                     }
                 }
@@ -65,14 +60,12 @@ struct CityList: View {
                 CityDetailScreen(city: city)
             }
             .searchable(text: $searchQuery, placement: .automatic, prompt: Text("Search cities"))
-            .onChange(of: searchQuery) { newValue in
+            .onChange(of: searchQuery) { _, newValue in
                 viewModel.filterCities(query: newValue)
             }
-            .onAppear {
-                viewModel.loadCities()
-                Task {
-                    await viewModel.warmUpCache()
-                }
+            .task {
+                await viewModel.loadCities()
+                await viewModel.warmUpCache()
             }
         }
     }
