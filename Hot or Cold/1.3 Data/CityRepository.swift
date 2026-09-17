@@ -11,13 +11,21 @@ protocol FavoriteToggling: AnyObject {
     func toggleFavorite(_ id: CityID)
 }
 
-/// `@MainActor` rather than an actor: `sections(matching:)` and `isFavorite(_:)` are read
-/// during SwiftUI layout, where `await` is unavailable.
+/// `@MainActor` rather than an actor: `favorites` and `allCities` are read during SwiftUI
+/// layout, where `await` is unavailable.
 @MainActor
 @Observable
 final class CityRepository {
+    typealias Sections = (favorites: [City], others: [City])
+
     private(set) var allCities: [City] = []
-    private(set) var favorites: Set<CityID> = []
+    /// Ordered by when each was favorited; the list surfaces them newest first.
+    private(set) var favorites: [CityID] = []
+
+    /// Membership and ordering in one lookup, rebuilt whenever `favorites` changes.
+    /// Observed, not ignored: `isFavorite(_:)` reads it during layout, so rows must
+    /// re-render the instant a star is toggled.
+    private var favoriteRanks: [CityID: Int] = [:]
 
     @ObservationIgnored private let dataSource: CityDataSource
     @ObservationIgnored private let store: FavoritesStore
@@ -25,11 +33,11 @@ final class CityRepository {
     init(dataSource: CityDataSource, store: FavoritesStore) {
         self.dataSource = dataSource
         self.store = store
-        self.favorites = (try? store.load()) ?? []
+        setFavorites((try? store.load()) ?? [])
     }
 
-    func load() async {
-        allCities = (try? await dataSource.loadCities()) ?? []
+    func load() async throws {
+        allCities = try await dataSource.loadCities()
     }
 
     func city(id: CityID) -> City? {
@@ -37,39 +45,58 @@ final class CityRepository {
     }
 
     /// Derived — `allCities` is never filtered in place, which is what made search destructive.
-    func cities(matching query: String) -> [City] {
-        Self.filter(allCities, query: query)
+    func sections(matching query: String) async throws -> Sections {
+        try await Self.sections(in: allCities, matching: query, favoriteRanks: favoriteRanks)
     }
 
-    func sections(matching query: String) -> (favorites: [City], others: [City]) {
-        let matches = cities(matching: query)
-        var favorited: [City] = []
+    /// `@concurrent` forces this off the caller's actor. Without it, a `nonisolated async`
+    /// function runs on the caller's executor — which would put a 200k scan on the main thread.
+    @concurrent
+    nonisolated static func sections(
+        in cities: [City],
+        matching query: String,
+        favoriteRanks: [CityID: Int]
+    ) async throws -> Sections {
+        let needle = query.searchFolded
+        var favorited: [(rank: Int, city: City)] = []
         var others: [City] = []
-        for city in matches {
-            if favorites.contains(city.id) {
-                favorited.append(city)
+
+        for (index, city) in cities.enumerated() {
+            // Superseded queries abandon their scan rather than compete with the current one.
+            if index.isMultiple(of: 4096) { try Task.checkCancellation() }
+            guard needle.isEmpty || city.searchKey.contains(needle) else { continue }
+
+            if let rank = favoriteRanks[city.id] {
+                favorited.append((rank, city))
             } else {
                 others.append(city)
             }
         }
-        return (favorited, others)
+
+        // Most recently favorited first, not catalogue order.
+        return (favorited.sorted { $0.rank > $1.rank }.map(\.city), others)
     }
 
-    /// `nonisolated` so a large catalogue can be filtered off the main actor.
-    nonisolated static func filter(_ cities: [City], query: String) -> [City] {
-        let needle = query.searchFolded
-        guard !needle.isEmpty else { return cities }
-        return cities.filter { $0.searchKey.contains(needle) }
+    private func setFavorites(_ ids: [CityID]) {
+        favorites = ids
+        favoriteRanks = Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($1, $0) })
     }
 }
 
 extension CityRepository: FavoriteToggling {
     func isFavorite(_ id: CityID) -> Bool {
-        favorites.contains(id)
+        favoriteRanks[id] != nil
     }
 
+    /// Optimistic: the star flips before the write, and reverts if it fails.
     func toggleFavorite(_ id: CityID) {
-        favorites.formSymmetricDifference([id])
-        try? store.save(favorites)
+        let previous = favorites
+        setFavorites(isFavorite(id) ? favorites.filter { $0 != id } : favorites + [id])
+
+        do {
+            try store.save(favorites)
+        } catch {
+            setFavorites(previous)
+        }
     }
 }

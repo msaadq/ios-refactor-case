@@ -6,10 +6,11 @@
 import Foundation
 import Synchronization
 
-/// Throws rather than returning optionals so a failed write can drive the caller's rollback.
+/// Ordered: position is the order the user favorited them, so the array is the data,
+/// not an arbitrary serialisation of a set. Throws so a failed write can drive rollback.
 nonisolated protocol FavoritesStore: Sendable {
-    func load() throws -> Set<CityID>
-    func save(_ ids: Set<CityID>) throws
+    func load() throws -> [CityID]
+    func save(_ ids: [CityID]) throws
 }
 
 /// `@unchecked` because `UserDefaults` is documented thread-safe but not marked `Sendable`.
@@ -22,33 +23,32 @@ nonisolated struct UserDefaultsFavoritesStore: FavoritesStore, @unchecked Sendab
         self.key = key
     }
 
-    func load() throws -> Set<CityID> {
+    func load() throws -> [CityID] {
         guard let data = defaults.data(forKey: key) else { return [] }
-        return Set(try JSONDecoder().decode([CityID].self, from: data))
+        return try JSONDecoder().decode([CityID].self, from: data)
     }
 
-    func save(_ ids: Set<CityID>) throws {
-        let sorted = ids.map(\.rawValue).sorted().map(CityID.init)
-        defaults.set(try JSONEncoder().encode(sorted), forKey: key)
+    func save(_ ids: [CityID]) throws {
+        defaults.set(try JSONEncoder().encode(ids), forKey: key)
     }
 }
 
 nonisolated final class InMemoryFavoritesStore: FavoritesStore {
-    private let storage: Mutex<Set<CityID>>
+    private let storage: Mutex<[CityID]>
     private let failOnSave: Bool
 
-    init(initial: Set<CityID> = [], failOnSave: Bool = false) {
+    init(initial: [CityID] = [], failOnSave: Bool = false) {
         self.storage = Mutex(initial)
         self.failOnSave = failOnSave
     }
 
     struct SaveFailure: Error {}
 
-    func load() throws -> Set<CityID> {
+    func load() throws -> [CityID] {
         storage.withLock { $0 }
     }
 
-    func save(_ ids: Set<CityID>) throws {
+    func save(_ ids: [CityID]) throws {
         if failOnSave { throw SaveFailure() }
         storage.withLock { $0 = ids }
     }

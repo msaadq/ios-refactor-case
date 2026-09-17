@@ -20,6 +20,9 @@ nonisolated struct BundledCityDataSource: CityDataSource {
         self.resource = resource
     }
 
+    /// `@concurrent` keeps decoding off the caller's actor — a `nonisolated async` function
+    /// would otherwise inherit it and run the parse on the main thread.
+    @concurrent
     func loadCities() async throws -> [City] {
         guard let url = bundle.url(forResource: resource, withExtension: "json") else {
             // A missing bundled resource is a build error, not a runtime condition the user can retry.
@@ -49,6 +52,7 @@ nonisolated struct SyntheticCityDataSource: CityDataSource {
         return value > 0 ? SyntheticCityDataSource(count: value) : nil
     }
 
+    @concurrent
     func loadCities() async throws -> [City] {
         (0..<count).map { index in
             City(

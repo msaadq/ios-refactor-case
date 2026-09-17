@@ -11,6 +11,19 @@
         }
       }
     },
+    "%@ of %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ of %2$@"
+          }
+        }
+      }
+    },
+    "All cities" : {
+
+    },
     "Cities" : {
       "localizations" : {
         "nb" : {
@@ -21,6 +34,12 @@
         }
       }
     },
+    "Couldn't load cities" : {
+
+    },
+    "Favorites" : {
+
+    },
     "Search cities" : {
       "localizations" : {
         "nb" : {
@@ -30,6 +49,9 @@
           }
         }
       }
+    },
+    "Temperature unavailable" : {
+
     },
     "Welcome to %@!" : {
       "localizations" : {
