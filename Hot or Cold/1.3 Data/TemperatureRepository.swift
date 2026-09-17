@@ -6,7 +6,7 @@
 import Foundation
 
 nonisolated protocol TemperatureProviding: Sendable {
-    func temperature(for city: City) async throws -> Celsius
+    func temperature(for city: City) async throws -> WeatherReading
     /// No-ops above `TemperatureRepository.prefetchThreshold`; large catalogues fetch lazily per row.
     func prefetch(_ cities: [City]) async
 }
@@ -17,21 +17,23 @@ actor TemperatureRepository: TemperatureProviding {
     static let prefetchThreshold = 100
 
     private let client: WeatherClient
-    private var cached: [CityID: Celsius] = [:]
-    private var inFlight: [CityID: Task<Celsius, Error>] = [:]
+    private var cached: [CityID: WeatherReading] = [:]
+    private var inFlight: [CityID: Task<WeatherReading, Error>] = [:]
 
     init(client: WeatherClient) {
         self.client = client
     }
 
-    func temperature(for city: City) async throws -> Celsius {
-        if let hit = cached[city.id] { return hit }
+    func temperature(for city: City) async throws -> WeatherReading {
+        // Expiry comes from the reading's own `interval`, so a long session stops serving
+        // launch-time weather without anyone having to invalidate the cache.
+        if let hit = cached[city.id], hit.isFresh(at: .now) { return hit }
         if let existing = inFlight[city.id] { return try await existing.value }
 
         // Registered before the first `await`, so concurrent callers join this task
         // instead of starting their own — actors are re-entrant, a Bool flag would not work.
         let task = Task { [client] in
-            try await client.currentTemperature(at: city.coordinate)
+            try await client.currentWeather(at: city.coordinate)
         }
         inFlight[city.id] = task
         defer { inFlight[city.id] = nil }

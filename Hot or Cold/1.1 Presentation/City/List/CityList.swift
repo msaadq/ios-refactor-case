@@ -165,8 +165,8 @@ private struct CityRow: View {
         switch viewModel.temperature(for: city) {
         case .loading:
             ProgressView().controlSize(.small)
-        case .loaded(let celsius):
-            Text("\(celsius, specifier: "%.1f")°")
+        case .loaded(let reading):
+            Text(reading.localizedTemperature())
         case .failed:
             Image(systemName: "exclamationmark.triangle")
                 .foregroundStyle(.secondary)

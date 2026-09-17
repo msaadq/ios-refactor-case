@@ -2,6 +2,7 @@
   "sourceLanguage" : "en",
   "strings" : {
     "%.1f°" : {
+      "extractionState" : "stale",
       "localizations" : {
         "nb" : {
           "stringUnit" : {

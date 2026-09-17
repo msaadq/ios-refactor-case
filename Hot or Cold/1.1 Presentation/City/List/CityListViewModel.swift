@@ -44,7 +44,7 @@ nonisolated enum CityListViewState: Equatable, Sendable {
 
 nonisolated enum RowTemperature: Equatable, Sendable {
     case loading
-    case loaded(Celsius)
+    case loaded(WeatherReading)
     case failed
 }
 
@@ -107,8 +107,16 @@ final class CityListViewModelImpl: CityListViewModel {
         await performLoad()
     }
 
+    /// Rows re-appear constantly as the list recycles, so this refetches only once the server's
+    /// own validity window has lapsed. A failed row stays failed until an explicit refresh
+    /// rather than retrying on every scroll past.
     func rowAppeared(_ city: City) async {
-        guard temperatures[city.id] == nil else { return }
+        switch temperatures[city.id] {
+        case .some(.loading), .some(.failed): return
+        case .some(.loaded(let reading)) where reading.isFresh(at: .now): return
+        case .none, .some(.loaded): break
+        }
+
         temperatures[city.id] = .loading
 
         do {

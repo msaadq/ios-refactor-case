@@ -72,7 +72,7 @@ struct PreviewCityCoordinator: CityCoordinator {
     init(
         cities: [City] = StubCityDataSource.sample,
         favorites: [CityID] = [],
-        temperature: Result<Celsius, WeatherError> = .success(15.1)
+        temperature: Result<WeatherReading, WeatherError> = .success(.fixture())
     ) {
         self.cities = cities
         self.repository = CityRepository(

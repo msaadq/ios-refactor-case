@@ -13,7 +13,7 @@ struct TemperatureRepositoryTests {
     /// `Bool` guard would let all fifteen callers past before any of them stored a result.
     @Test("Concurrent requests for one city share a single network call")
     func concurrentRequestsForSameCityDeduplicate() async throws {
-        let client = StubWeatherClient(result: .success(12.5), delay: .milliseconds(50))
+        let client = StubWeatherClient(result: .success(.fixture(celsius: 12.5)), delay: .milliseconds(50))
         let repository = TemperatureRepository(client: client)
         let city = StubCityDataSource.sample[0]
 
@@ -24,6 +24,25 @@ struct TemperatureRepositoryTests {
         }
 
         #expect(client.callCount == 1)
+    }
+
+    /// Expiry is data, not a constant: the cache holds a reading exactly as long as the server
+    /// said it stands, so a long session stops serving launch-time weather.
+    @Test("A reading is reused while fresh and refetched once its window lapses")
+    func staleReadingsAreRefetched() async throws {
+        let city = StubCityDataSource.sample[0]
+
+        let fresh = StubWeatherClient(result: .success(.fixture(observedAt: .now)))
+        let holding = TemperatureRepository(client: fresh)
+        _ = try await holding.temperature(for: city)
+        _ = try await holding.temperature(for: city)
+        #expect(fresh.callCount == 1)
+
+        let expired = StubWeatherClient(result: .success(.fixture(observedAt: .distantPast)))
+        let refetching = TemperatureRepository(client: expired)
+        _ = try await refetching.temperature(for: city)
+        _ = try await refetching.temperature(for: city)
+        #expect(expired.callCount == 2)
     }
 
     /// The batch/lazy split: small catalogues warm up front, large ones fetch per row as they

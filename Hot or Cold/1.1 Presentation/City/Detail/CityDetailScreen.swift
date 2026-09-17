@@ -42,8 +42,8 @@ struct CityDetailScreen: View {
         switch viewModel.temperature {
         case .loading:
             ProgressView().controlSize(.large)
-        case .loaded(let celsius):
-            Text("\(celsius, specifier: "%.1f")°")
+        case .loaded(let reading):
+            Text(reading.localizedTemperature())
                 .font(.system(size: 80, weight: .thin))
                 .contentTransition(.numericText())
         case .failed:

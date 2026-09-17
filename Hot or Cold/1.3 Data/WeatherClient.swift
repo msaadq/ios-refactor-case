@@ -5,9 +5,6 @@
 
 import Foundation
 
-/// The API is asked for Celsius, so the unit is known rather than carried.
-typealias Celsius = Double
-
 nonisolated enum WeatherError: Error, Equatable {
     case invalidURL
     case transport(String)
@@ -16,7 +13,7 @@ nonisolated enum WeatherError: Error, Equatable {
 }
 
 nonisolated protocol WeatherClient: Sendable {
-    func currentTemperature(at coordinate: Coordinate) async throws -> Celsius
+    func currentWeather(at coordinate: Coordinate) async throws -> WeatherReading
 }
 
 // MARK: - Live
@@ -28,7 +25,7 @@ nonisolated struct URLSessionWeatherClient: WeatherClient {
         self.session = session
     }
 
-    func currentTemperature(at coordinate: Coordinate) async throws -> Celsius {
+    func currentWeather(at coordinate: Coordinate) async throws -> WeatherReading {
         guard let url = Self.makeURL(for: coordinate) else { throw WeatherError.invalidURL }
 
         let data: Data
@@ -44,7 +41,9 @@ nonisolated struct URLSessionWeatherClient: WeatherClient {
         }
 
         do {
-            return try JSONDecoder().decode(CurrentWeatherDTO.self, from: data).celsius
+            return try JSONDecoder().decode(CurrentWeatherDTO.self, from: data).reading()
+        } catch let error as WeatherError {
+            throw error
         } catch {
             throw WeatherError.decoding(error.localizedDescription)
         }
@@ -68,17 +67,17 @@ nonisolated struct URLSessionWeatherClient: WeatherClient {
 nonisolated final class StubWeatherClient: WeatherClient, @unchecked Sendable {
     private let lock = NSLock()
     private var _callCount = 0
-    private let result: Result<Celsius, WeatherError>
+    private let result: Result<WeatherReading, WeatherError>
     private let delay: Duration
 
     var callCount: Int { lock.withLock { _callCount } }
 
-    init(result: Result<Celsius, WeatherError> = .success(15.1), delay: Duration = .zero) {
+    init(result: Result<WeatherReading, WeatherError> = .success(.fixture()), delay: Duration = .zero) {
         self.result = result
         self.delay = delay
     }
 
-    func currentTemperature(at coordinate: Coordinate) async throws -> Celsius {
+    func currentWeather(at coordinate: Coordinate) async throws -> WeatherReading {
         lock.withLock { _callCount += 1 }
         if delay > .zero { try? await Task.sleep(for: delay) }
         return try result.get()
