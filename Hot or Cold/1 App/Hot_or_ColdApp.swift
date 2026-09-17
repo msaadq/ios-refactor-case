@@ -9,9 +9,11 @@ import SwiftUI
 
 @main
 struct Hot_or_ColdApp: App {
+    @State private var coordinator: any CityCoordinator = LiveCityCoordinator.makeDefault()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(coordinator: coordinator)
         }
     }
 }

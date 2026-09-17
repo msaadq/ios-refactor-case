@@ -1,18 +1,182 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "%.1f°" : {
+    "city.favorite.add" : {
+      "comment" : "Swipe action and detail-screen toolbar button.",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add to favorites"
+          }
+        },
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%.1f"
+            "value" : "Legg til i favoritter"
           }
         }
       }
     },
-    "Cities" : {
+    "city.favorite.remove" : {
+      "comment" : "Swipe action and detail-screen toolbar button.",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove from favorites"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fjern fra favoritter"
+          }
+        }
+      }
+    },
+    "city.temperature.unavailable" : {
+      "comment" : "Shown when one city's temperature request failed; other rows are unaffected.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Temperature unavailable"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Temperatur utilgjengelig"
+          }
+        }
+      }
+    },
+    "cityDetail.title.fallback" : {
+      "comment" : "Navigation title when a route's id no longer resolves to a city.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "City"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "By"
+          }
+        }
+      }
+    },
+    "cityDetail.unavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "City unavailable"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Byen er utilgjengelig"
+          }
+        }
+      }
+    },
+    "cityList.error.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't load cities"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kunne ikke laste byene"
+          }
+        }
+      }
+    },
+    "cityList.paging.progress" : {
+      "comment" : "Rendered window over the matching cities, e.g. \"100 of 200 000\". Positional so a translation may reorder the counts.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ of %2$@"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ av %2$@"
+          }
+        }
+      }
+    },
+    "cityList.refresh" : {
+      "comment" : "Toolbar button; icon-only, so this is its accessibility label.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oppdater"
+          }
+        }
+      }
+    },
+    "cityList.search.placeholder" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search cities"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Søk etter byer"
+          }
+        }
+      }
+    },
+    "cityList.section.allCities" : {
+      "comment" : "Header for the non-favorites section, used only when a favorites section is also shown.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All cities"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle byer"
+          }
+        }
+      }
+    },
+    "cityList.section.cities" : {
+      "comment" : "Header for the only section, when nothing is favorited.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cities"
+          }
+        },
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
@@ -21,22 +185,34 @@
         }
       }
     },
-    "Search cities" : {
+    "cityList.section.favorites" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Favorites"
+          }
+        },
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Søk etter by"
+            "value" : "Favoritter"
           }
         }
       }
     },
-    "Welcome to %@!" : {
+    "cityList.title" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cities"
+          }
+        },
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Velkommen til %@!"
+            "value" : "Byer"
           }
         }
       }

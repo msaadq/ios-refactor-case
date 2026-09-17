@@ -7,93 +7,234 @@
 
 import SwiftUI
 
-protocol CityListViewModel {
-    var cities: [City] { get }
-    // TODO: When filtering favorites, treat the list of cities as if it had 200.000 entries. Make sure the UI would remain responsive.
-    var favorites: Set<String> { get }
-    var isLoading: Bool { get }
+@MainActor
+protocol CityListViewModel: AnyObject {
+    var viewState: CityListViewState { get }
+    var navigationPath: [CityRoute] { get set }
 
-    func loadCities()
-    func warmUpCache() async
-    func fetchTemperature(for city: City, completion: @escaping @Sendable (Double?) -> Void)
-    func toggleFavorite(_ city: City)
-    func filterCities(query: String)
+    func temperature(for city: City) -> RowTemperature
+    func isFavorite(_ city: City) -> Bool
+
+    func handle(_ action: CityListAction)
+
+    /// Safe to call repeatedly — `.task` re-runs on every navigation.
+    func load() async
+    func rowAppeared(_ city: City) async
 }
 
+/// User intent, not view lifecycle. `.task` hooks stay `async` methods above, because those
+/// contexts own their cancellation and the ViewModel should not re-spawn work it cannot tie
+/// to the view's lifetime.
+nonisolated enum CityListAction: Equatable, Sendable {
+    case didChangeQuery(String)
+    case didSelectCity(CityID)
+    case didToggleFavorite(CityID)
+    case didReachListEnd
+    case didTapRefresh
+}
+
+nonisolated enum CityListViewState: Equatable, Sendable {
+    case initial
+    case loading
+    /// `others` is the rendered window; `totalOthers` is how many matched in full.
+    case loaded(favorites: [City], others: [City], totalOthers: Int)
+    case empty(query: String)
+    case error(message: String)
+}
+
+nonisolated enum RowTemperature: Equatable, Sendable {
+    case loading
+    case loaded(WeatherReading)
+    case failed
+}
+
+@MainActor
 @Observable
-class CityListViewModelImpl: CityListViewModel {
-    var cities: [City] = []
-    var favorites: Set<String> = []
-    nonisolated(unsafe) var isLoading: Bool = false
+final class CityListViewModelImpl: CityListViewModel {
+    static let searchDebounce: Duration = .milliseconds(300)
+    /// Below this the paging path is inert, so the real catalogue never sees a footer.
+    static let pageSize = 100
 
-    func loadCities() {
-        Thread.printCurrentThreadInfo(prefix: "Loading cities")
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.isLoading = true
-            
-            self?.cities = [
-                City(name: "Oslo", lat: 59.91, lon: 10.75),
-                City(name: "Tokyo", lat: 35.68, lon: 139.69),
-                City(name: "Lisbon", lat: 38.72, lon: -9.14),
-                City(name: "New York", lat: 40.71, lon: -74.01),
-                City(name: "Sydney", lat: -33.87, lon: 151.21),
-                City(name: "Cairo", lat: 30.04, lon: 31.23),
-                City(name: "Moscow", lat: 55.75, lon: 37.62),
-                City(name: "Rio de Janeiro", lat: -22.91, lon: -43.17),
-                City(name: "Cape Town", lat: -33.92, lon: 18.42),
-                City(name: "Paris", lat: 48.85, lon: 2.35),
-                City(name: "Berlin", lat: 52.52, lon: 13.40),
-                City(name: "Madrid", lat: 40.42, lon: -3.70),
-                City(name: "Rome", lat: 41.90, lon: 12.49),
-                City(name: "Bangkok", lat: 13.75, lon: 100.51),
-                City(name: "Dubai", lat: 25.20, lon: 55.27)
-            ]
-            
-            self?.isLoading = false
+    private(set) var viewState: CityListViewState = .initial
+    private(set) var temperatures: [CityID: RowTemperature] = [:]
+    /// Owned here rather than by the `NavigationStack`, so a push is assertable state
+    /// rather than something that only exists while rendering.
+    var navigationPath: [CityRoute] = []
+
+    private var query = ""
+    private var allFavorites: [City] = []
+    private var allOthers: [City] = []
+    private var visibleCount = CityListViewModelImpl.pageSize
+    private var hasLoaded = false
+    /// The favorites the current sections were partitioned against, so a return from the
+    /// detail screen can tell "nothing changed" from "re-partition me" without re-scanning.
+    private var partitionedFavorites: [CityID] = []
+
+    @ObservationIgnored private let repository: CityRepository
+    @ObservationIgnored private let temperatureProvider: TemperatureProviding
+    @ObservationIgnored private var searchDebounceTask: Task<Void, Never>?
+    @ObservationIgnored private var sectionsTask: Task<Void, Never>?
+    @ObservationIgnored private var refreshTask: Task<Void, Never>?
+
+    init(repository: CityRepository, temperatureProvider: TemperatureProviding) {
+        self.repository = repository
+        self.temperatureProvider = temperatureProvider
+    }
+
+    deinit {
+        searchDebounceTask?.cancel()
+        sectionsTask?.cancel()
+        refreshTask?.cancel()
+    }
+
+    func handle(_ action: CityListAction) {
+        switch action {
+        case .didChangeQuery(let query): search(query)
+        case .didSelectCity(let id): navigationPath.append(.detail(id))
+        case .didToggleFavorite(let id): toggleFavorite(id)
+        case .didReachListEnd: loadMore()
+        case .didTapRefresh: refresh()
         }
     }
 
-    func warmUpCache() async {
-        // Pre-warm the temperature cache so the first scroll feels snappy.
-        try? await Task.sleep(for: .seconds(2))
-        print("Cache warm-up complete")
+    func temperature(for city: City) -> RowTemperature {
+        temperatures[city.id] ?? .loading
     }
 
-    func fetchTemperature(for city: City, completion: @escaping @Sendable (Double?) -> Void) {
-        isLoading = true
-        let url = URL(string: "https://api.open-meteo.com/v1/forecast?latitude=\(city.lat)&longitude=\(city.lon)&current=temperature_2m")!
-        URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
-            Thread.printCurrentThreadInfo(prefix: "Fetching temperature for \(city.name).")
+    func isFavorite(_ city: City) -> Bool {
+        repository.isFavorite(city.id)
+    }
 
-            self?.isLoading = false
+    func load() async {
+        guard !hasLoaded else {
+            // `.task` refires when the detail screen pops, and a star flipped there moves a
+            // city between sections. An array compare, so an unchanged return still costs nothing.
+            guard repository.favorites != partitionedFavorites else { return }
+            await refreshSections(resetWindow: false)
+            return
+        }
+        await performLoad()
+    }
 
-            guard let data = data,
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let current = json["current"] as? [String: Any],
-                  let temp = current["temperature_2m"] as? Double else {
-                completion(nil)
-                return
+    /// Rows re-appear constantly as the list recycles, so this refetches only once the server's
+    /// own validity window has lapsed. A failed row stays failed until an explicit refresh
+    /// rather than retrying on every scroll past.
+    func rowAppeared(_ city: City) async {
+        switch temperatures[city.id] {
+        case .some(.loading), .some(.failed): return
+        case .some(.loaded(let reading)) where reading.isFresh(at: .now): return
+        case .none, .some(.loaded): break
+        }
+
+        temperatures[city.id] = .loading
+
+        do {
+            temperatures[city.id] = .loaded(try await temperatureProvider.temperature(for: city))
+        } catch {
+            temperatures[city.id] = .failed
+        }
+    }
+
+    // MARK: - Actions
+
+    /// Cancels the pending timer *and* any in-flight scan, so a superseded query can never
+    /// land after a newer one.
+    private func search(_ query: String) {
+        searchDebounceTask?.cancel()
+        sectionsTask?.cancel()
+
+        searchDebounceTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: Self.searchDebounce)
+                guard !Task.isCancelled else { return }
+                await self?.apply(query: query)
+            } catch {
+                // Cancelled by the next keystroke — expected, not a failure.
             }
-
-            completion(temp)
-        }.resume()
-    }
-    
-    func toggleFavorite(_ city: City) {
-        // TODO: Implement across-session persistence of favorites using your prefered method.
-        if favorites.contains(city.name) {
-            favorites.remove(city.name)
-        } else {
-            favorites.insert(city.name)
         }
     }
-    
-    func filterCities(query: String) {
-        // TODO: Implement this search. The search should be debounced for 300 ms to avoid filtering on every keystroke.
-        // Also, why is this behaving so weird? Fix it please 🙌
-        print("Queried for: \(query)")
-        self.cities = cities.filter {
-            $0.name.lowercased().contains(query.lowercased())
+
+    private func toggleFavorite(_ id: CityID) {
+        repository.toggleFavorite(id)
+
+        sectionsTask?.cancel()
+        // Keeps the window, so the rows around the user's finger stay put.
+        sectionsTask = Task { [weak self] in await self?.refreshSections(resetWindow: false) }
+    }
+
+    /// Re-windows an array we already hold — no filtering, no repository call.
+    private func loadMore() {
+        guard visibleCount < allOthers.count else { return }
+        visibleCount += Self.pageSize
+        emitState()
+    }
+
+    private func refresh() {
+        refreshTask?.cancel()
+        refreshTask = Task { [weak self] in await self?.performLoad() }
+    }
+
+    // MARK: - Private
+
+    private func performLoad() async {
+        viewState = .loading
+
+        do {
+            try await repository.load()
+        } catch {
+            viewState = .error(message: error.localizedDescription)
+            return
+        }
+
+        // Set only on success, so a load cancelled by navigation retries on return.
+        hasLoaded = true
+
+        await refreshSections()
+        // Below the provider's threshold this warms every row up front; above it, a no-op.
+        await temperatureProvider.prefetch(repository.allCities)
+    }
+
+    private func apply(query: String) async {
+        self.query = query
+        await refreshSections()
+    }
+
+    /// `resetWindow` is false when the catalogue is only re-partitioned, not re-queried.
+    private func refreshSections(resetWindow: Bool = true) async {
+        // Read before the scan, which partitions against the same snapshot.
+        let scannedFavorites = repository.favorites
+        let sections: CityRepository.Sections
+        do {
+            sections = try await repository.sections(matching: query)
+        } catch {
+            return // superseded scan
+        }
+
+        // A short scan can finish before it notices cancellation, and it partitioned against
+        // the favorites as they were when it started.
+        guard !Task.isCancelled else { return }
+
+        allFavorites = sections.favorites
+        allOthers = sections.others
+        partitionedFavorites = scannedFavorites
+        if resetWindow { visibleCount = Self.pageSize }
+        emitState()
+    }
+
+    /// Animated at the mutation site rather than with `.animation` on the List, which would put
+    /// an implicit animation on the same rows the List is already diffing.
+    private func emitState() {
+        guard !allFavorites.isEmpty || !allOthers.isEmpty else {
+            viewState = .empty(query: query)
+            return
+        }
+
+        withAnimation {
+            viewState = .loaded(
+                favorites: allFavorites,
+                others: Array(allOthers.prefix(visibleCount)),
+                totalOthers: allOthers.count
+            )
         }
     }
 }

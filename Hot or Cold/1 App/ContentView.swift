@@ -8,11 +8,13 @@
 import SwiftUI
 
 struct ContentView: View {
+    let coordinator: any CityCoordinator
+
     var body: some View {
-        CityList()
+        CityList(coordinator: coordinator)
     }
 }
 
 #Preview {
-    ContentView()
+    ContentView(coordinator: PreviewCityCoordinator())
 }
