@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		5A5A5A010000000000000001 /* SnapshotTesting in Frameworks */ = {isa = PBXBuildFile; productRef = 5A5A5A020000000000000002 /* SnapshotTesting */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		BF9C94EF2FA8ACFD004B0239 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -46,6 +50,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5A5A5A010000000000000001 /* SnapshotTesting in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -113,6 +118,7 @@
 			);
 			name = "Hot or ColdTests";
 			packageProductDependencies = (
+				5A5A5A020000000000000002 /* SnapshotTesting */,
 			);
 			productName = "Hot or ColdTests";
 			productReference = BF9C94EE2FA8ACFD004B0239 /* Hot or ColdTests.xctest */;
@@ -147,6 +153,9 @@
 			);
 			mainGroup = BF9C94D82FA8ACFC004B0239;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5A5A5A030000000000000003 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BF9C94E22FA8ACFC004B0239 /* Products */;
 			projectDirPath = "";
@@ -473,6 +482,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		5A5A5A030000000000000003 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pointfreeco/swift-snapshot-testing";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.17.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5A5A5A020000000000000002 /* SnapshotTesting */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5A5A5A030000000000000003 /* XCRemoteSwiftPackageReference "swift-snapshot-testing" */;
+			productName = SnapshotTesting;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = BF9C94D92FA8ACFC004B0239 /* Project object */;
 }

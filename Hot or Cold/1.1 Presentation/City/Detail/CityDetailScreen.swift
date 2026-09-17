@@ -10,6 +10,10 @@ import SwiftUI
 struct CityDetailScreen: View {
     @State private var viewModel: any CityDetailViewModel
 
+    /// Taken from the environment rather than `.autoupdatingCurrent`, so a locale override
+    /// reaches the number as well as the words.
+    @Environment(\.locale) private var locale
+
     init(viewModel: any CityDetailViewModel) {
         self.viewModel = viewModel
     }
@@ -61,7 +65,7 @@ struct CityDetailScreen: View {
         case .loading:
             ProgressView().controlSize(.large)
         case .loaded(let reading):
-            Text(reading.localizedTemperature())
+            Text(reading.localizedTemperature(in: locale))
                 .font(.system(size: 80, weight: .thin))
                 .contentTransition(.numericText())
         case .failed:

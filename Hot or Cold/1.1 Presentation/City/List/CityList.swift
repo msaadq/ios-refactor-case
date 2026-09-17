@@ -124,6 +124,10 @@ private struct CityRow: View {
     let city: City
     let viewModel: any CityListViewModel
 
+    /// Taken from the environment rather than `.autoupdatingCurrent`, so a locale override
+    /// reaches the number as well as the words.
+    @Environment(\.locale) private var locale
+
     /// A `Button` rather than a `NavigationLink`, so the push goes through `handle(_:)` and is
     /// assertable without rendering. The chevron is what the link would have drawn for free.
     var body: some View {
@@ -170,7 +174,7 @@ private struct CityRow: View {
         case .loading:
             ProgressView().controlSize(.small)
         case .loaded(let reading):
-            Text(reading.localizedTemperature())
+            Text(reading.localizedTemperature(in: locale))
         case .failed:
             Image(systemName: "exclamationmark.triangle")
                 .foregroundStyle(.secondary)
