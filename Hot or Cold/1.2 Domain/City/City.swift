@@ -66,8 +66,10 @@ nonisolated struct City: Identifiable, Hashable, Sendable, Decodable {
 }
 
 extension String {
-    /// `locale: nil` keeps folding deterministic across devices, so tests and search agree.
+    /// `Latin-ASCII` first: folding treats `ø`/`æ` as distinct letters rather than decorated
+    /// ones, so `tromso` would never reach `Tromsø`. `locale: nil` keeps it device-independent.
     nonisolated var searchFolded: String {
-        folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
+        (applyingTransform(StringTransform("Latin-ASCII"), reverse: false) ?? self)
+            .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
     }
 }
