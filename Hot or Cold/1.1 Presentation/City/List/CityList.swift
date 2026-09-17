@@ -28,11 +28,11 @@ struct CityList: View {
     var body: some View {
         NavigationStack(path: navigationPath) {
             content
-                .navigationTitle("Cities")
+                .navigationTitle("cityList.title")
                 .toolbarTitleDisplayMode(.inline)
                 .toolbar { refreshButton }
                 .navigationDestination(for: CityRoute.self) { destination(for: $0) }
-                .searchable(text: $searchQuery, placement: .automatic, prompt: Text("Search cities"))
+                .searchable(text: $searchQuery, placement: .automatic, prompt: Text("cityList.search.placeholder"))
                 .onChange(of: searchQuery) { _, newValue in viewModel.handle(.didChangeQuery(newValue)) }
                 .task { await viewModel.load() }
         }
@@ -60,18 +60,18 @@ struct CityList: View {
         case .empty(let query):
             ContentUnavailableView.search(text: query)
         case .error(let message):
-            ContentUnavailableView("Couldn't load cities", systemImage: "exclamationmark.triangle", description: Text(message))
+            ContentUnavailableView("cityList.error.title", systemImage: "exclamationmark.triangle", description: Text(message))
         case .loaded(let favorites, let others, let totalOthers):
             List {
                 if !favorites.isEmpty {
-                    Section("Favorites") {
+                    Section("cityList.section.favorites") {
                         ForEach(favorites) {
                             CityRow(city: $0, viewModel: viewModel).id(RowID.favorite($0.id))
                         }
                     }
                 }
                 if !others.isEmpty {
-                    Section(favorites.isEmpty ? "Cities" : "All cities") {
+                    Section(favorites.isEmpty ? "cityList.section.cities" : "cityList.section.allCities") {
                         ForEach(others) {
                             CityRow(city: $0, viewModel: viewModel).id(RowID.other($0.id))
                         }
@@ -92,7 +92,10 @@ struct CityList: View {
             Spacer()
             VStack(spacing: 6) {
                 ProgressView()
-                Text("\(shown.formatted()) of \(total.formatted())")
+                // Formatted rather than interpolated into the key, so the key stays semantic
+                // and the translation controls argument order.
+                Text(String(format: String(localized: "cityList.paging.progress"),
+                            shown.formatted(), total.formatted()))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -109,8 +112,9 @@ struct CityList: View {
                 ProgressView()
             } else {
                 Button { viewModel.handle(.didTapRefresh) } label: {
-                    Image(systemName: "arrow.counterclockwise")
+                    Label("cityList.refresh", systemImage: "arrow.counterclockwise")
                 }
+                .labelStyle(.iconOnly)
             }
         }
     }
@@ -156,8 +160,8 @@ private struct CityRow: View {
 
     private var isFavorite: Bool { viewModel.isFavorite(city) }
 
-    private var favoriteActionTitle: String {
-        isFavorite ? "Remove from favorites" : "Add to favorites"
+    private var favoriteActionTitle: LocalizedStringKey {
+        isFavorite ? "city.favorite.remove" : "city.favorite.add"
     }
 
     @ViewBuilder
@@ -170,7 +174,7 @@ private struct CityRow: View {
         case .failed:
             Image(systemName: "exclamationmark.triangle")
                 .foregroundStyle(.secondary)
-                .accessibilityLabel("Temperature unavailable")
+                .accessibilityLabel("city.temperature.unavailable")
         }
     }
 }

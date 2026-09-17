@@ -16,7 +16,8 @@ struct CityDetailScreen: View {
 
     var body: some View {
         content
-            .navigationTitle(viewModel.city?.name ?? "City")
+            // `Text(_:)` over the string overload: the name is data, the fallback is a key.
+            .navigationTitle(Text(viewModel.city?.name ?? String(localized: "cityDetail.title.fallback")))
             .toolbar { favoriteButton }
             .task { await viewModel.load() }
     }
@@ -29,7 +30,7 @@ struct CityDetailScreen: View {
                     viewModel.toggleFavorite()
                 } label: {
                     Label(
-                        viewModel.isFavorite ? "Remove from favorites" : "Add to favorites",
+                        viewModel.isFavorite ? "city.favorite.remove" : "city.favorite.add",
                         systemImage: viewModel.isFavorite ? "star.fill" : "star"
                     )
                 }
@@ -50,7 +51,7 @@ struct CityDetailScreen: View {
             .padding(.horizontal)
         } else {
             // Reachable only if the catalogue changed under a pushed route.
-            ContentUnavailableView("City unavailable", systemImage: "mappin.slash")
+            ContentUnavailableView("cityDetail.unavailable", systemImage: "mappin.slash")
         }
     }
 
@@ -64,7 +65,7 @@ struct CityDetailScreen: View {
                 .font(.system(size: 80, weight: .thin))
                 .contentTransition(.numericText())
         case .failed:
-            Label("Temperature unavailable", systemImage: "exclamationmark.triangle")
+            Label("city.temperature.unavailable", systemImage: "exclamationmark.triangle")
                 .foregroundStyle(.secondary)
         }
     }
