@@ -21,6 +21,9 @@
         }
       }
     },
+    "Add to favorites" : {
+
+    },
     "All cities" : {
 
     },
@@ -34,10 +37,16 @@
         }
       }
     },
+    "City unavailable" : {
+
+    },
     "Couldn't load cities" : {
 
     },
     "Favorites" : {
+
+    },
+    "Remove from favorites" : {
 
     },
     "Search cities" : {
@@ -54,6 +63,7 @@
 
     },
     "Welcome to %@!" : {
+      "extractionState" : "stale",
       "localizations" : {
         "nb" : {
           "stringUnit" : {

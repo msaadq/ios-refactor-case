@@ -15,23 +15,40 @@ private enum RowID: Hashable {
 }
 
 struct CityList: View {
-    @State private var viewModel: CityListViewModel
+    @State private var viewModel: any CityListViewModel
     @State private var searchQuery = ""
 
-    init(viewModel: CityListViewModel) {
-        self.viewModel = viewModel
+    private let coordinator: any CityCoordinator
+
+    init(coordinator: any CityCoordinator) {
+        self.coordinator = coordinator
+        self.viewModel = coordinator.makeListViewModel()
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: navigationPath) {
             content
                 .navigationTitle("Cities")
                 .toolbarTitleDisplayMode(.inline)
                 .toolbar { refreshButton }
-                .navigationDestination(for: City.self) { CityDetailScreen(city: $0) }
+                .navigationDestination(for: CityRoute.self) { destination(for: $0) }
                 .searchable(text: $searchQuery, placement: .automatic, prompt: Text("Search cities"))
-                .onChange(of: searchQuery) { _, newValue in viewModel.search(newValue) }
+                .onChange(of: searchQuery) { _, newValue in viewModel.handle(.didChangeQuery(newValue)) }
                 .task { await viewModel.load() }
+        }
+    }
+
+    /// Written by hand rather than `$viewModel.navigationPath`: the ViewModel is held as an
+    /// existential, which has no writable key path to project through.
+    private var navigationPath: Binding<[CityRoute]> {
+        Binding { viewModel.navigationPath } set: { viewModel.navigationPath = $0 }
+    }
+
+    @ViewBuilder
+    private func destination(for route: CityRoute) -> some View {
+        switch route {
+        case .detail(let id):
+            CityDetailScreen(viewModel: coordinator.makeDetailViewModel(for: id))
         }
     }
 
@@ -82,7 +99,7 @@ struct CityList: View {
             Spacer()
         }
         .listRowSeparator(.hidden)
-        .onAppear { viewModel.loadMore() }
+        .onAppear { viewModel.handle(.didReachListEnd) }
     }
 
     @ToolbarContentBuilder
@@ -91,7 +108,7 @@ struct CityList: View {
             if viewModel.viewState == .loading {
                 ProgressView()
             } else {
-                Button { Task { await viewModel.refresh() } } label: {
+                Button { viewModel.handle(.didTapRefresh) } label: {
                     Image(systemName: "arrow.counterclockwise")
                 }
             }
@@ -101,10 +118,14 @@ struct CityList: View {
 
 private struct CityRow: View {
     let city: City
-    let viewModel: CityListViewModel
+    let viewModel: any CityListViewModel
 
+    /// A `Button` rather than a `NavigationLink`, so the push goes through `handle(_:)` and is
+    /// assertable without rendering. The chevron is what the link would have drawn for free.
     var body: some View {
-        NavigationLink(value: city) {
+        Button {
+            viewModel.handle(.didSelectCity(city.id))
+        } label: {
             HStack {
                 Text(city.name)
                     .font(.headline)
@@ -112,18 +133,24 @@ private struct CityRow: View {
                 Spacer()
 
                 temperature
+
+                Image(systemName: "chevron.forward")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
             }
+            .contentShape(.rect)
         }
+        .buttonStyle(.plain)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: isFavorite ? .destructive : nil) {
-                viewModel.toggleFavorite(city)
+                viewModel.handle(.didToggleFavorite(city.id))
             } label: {
                 Label(favoriteActionTitle, systemImage: isFavorite ? "star.slash" : "star")
             }
             .tint(isFavorite ? .red : .yellow)
         }
         // The swipe is invisible to VoiceOver, so the same action is exposed to the rotor.
-        .accessibilityAction(named: favoriteActionTitle) { viewModel.toggleFavorite(city) }
+        .accessibilityAction(named: favoriteActionTitle) { viewModel.handle(.didToggleFavorite(city.id)) }
         .task { await viewModel.rowAppeared(city) }
     }
 

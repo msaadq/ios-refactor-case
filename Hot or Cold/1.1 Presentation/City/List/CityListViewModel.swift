@@ -8,19 +8,29 @@
 import SwiftUI
 
 @MainActor
-protocol CityListViewModel {
+protocol CityListViewModel: AnyObject {
     var viewState: CityListViewState { get }
+    var navigationPath: [CityRoute] { get set }
 
     func temperature(for city: City) -> RowTemperature
     func isFavorite(_ city: City) -> Bool
 
+    func handle(_ action: CityListAction)
+
     /// Safe to call repeatedly — `.task` re-runs on every navigation.
     func load() async
-    func refresh() async
-    func search(_ query: String)
-    func toggleFavorite(_ city: City)
-    func loadMore()
     func rowAppeared(_ city: City) async
+}
+
+/// User intent, not view lifecycle. `.task` hooks stay `async` methods above, because those
+/// contexts own their cancellation and the ViewModel should not re-spawn work it cannot tie
+/// to the view's lifetime.
+nonisolated enum CityListAction: Equatable, Sendable {
+    case didChangeQuery(String)
+    case didSelectCity(CityID)
+    case didToggleFavorite(CityID)
+    case didReachListEnd
+    case didTapRefresh
 }
 
 nonisolated enum CityListViewState: Equatable, Sendable {
@@ -47,6 +57,9 @@ final class CityListViewModelImpl: CityListViewModel {
 
     private(set) var viewState: CityListViewState = .initial
     private(set) var temperatures: [CityID: RowTemperature] = [:]
+    /// Owned here rather than by the `NavigationStack`, so a push is assertable state
+    /// rather than something that only exists while rendering.
+    var navigationPath: [CityRoute] = []
 
     private var query = ""
     private var allFavorites: [City] = []
@@ -58,6 +71,7 @@ final class CityListViewModelImpl: CityListViewModel {
     @ObservationIgnored private let temperatureProvider: TemperatureProviding
     @ObservationIgnored private var searchDebounceTask: Task<Void, Never>?
     @ObservationIgnored private var sectionsTask: Task<Void, Never>?
+    @ObservationIgnored private var refreshTask: Task<Void, Never>?
 
     init(repository: CityRepository, temperatureProvider: TemperatureProviding) {
         self.repository = repository
@@ -67,6 +81,17 @@ final class CityListViewModelImpl: CityListViewModel {
     deinit {
         searchDebounceTask?.cancel()
         sectionsTask?.cancel()
+        refreshTask?.cancel()
+    }
+
+    func handle(_ action: CityListAction) {
+        switch action {
+        case .didChangeQuery(let query): search(query)
+        case .didSelectCity(let id): navigationPath.append(.detail(id))
+        case .didToggleFavorite(let id): toggleFavorite(id)
+        case .didReachListEnd: loadMore()
+        case .didTapRefresh: refresh()
+        }
     }
 
     func temperature(for city: City) -> RowTemperature {
@@ -82,9 +107,57 @@ final class CityListViewModelImpl: CityListViewModel {
         await performLoad()
     }
 
-    func refresh() async {
-        await performLoad()
+    func rowAppeared(_ city: City) async {
+        guard temperatures[city.id] == nil else { return }
+        temperatures[city.id] = .loading
+
+        do {
+            temperatures[city.id] = .loaded(try await temperatureProvider.temperature(for: city))
+        } catch {
+            temperatures[city.id] = .failed
+        }
     }
+
+    // MARK: - Actions
+
+    /// Cancels the pending timer *and* any in-flight scan, so a superseded query can never
+    /// land after a newer one.
+    private func search(_ query: String) {
+        searchDebounceTask?.cancel()
+        sectionsTask?.cancel()
+
+        searchDebounceTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: Self.searchDebounce)
+                guard !Task.isCancelled else { return }
+                await self?.apply(query: query)
+            } catch {
+                // Cancelled by the next keystroke — expected, not a failure.
+            }
+        }
+    }
+
+    private func toggleFavorite(_ id: CityID) {
+        repository.toggleFavorite(id)
+
+        sectionsTask?.cancel()
+        // Keeps the window, so the rows around the user's finger stay put.
+        sectionsTask = Task { [weak self] in await self?.refreshSections(resetWindow: false) }
+    }
+
+    /// Re-windows an array we already hold — no filtering, no repository call.
+    private func loadMore() {
+        guard visibleCount < allOthers.count else { return }
+        visibleCount += Self.pageSize
+        emitState()
+    }
+
+    private func refresh() {
+        refreshTask?.cancel()
+        refreshTask = Task { [weak self] in await self?.performLoad() }
+    }
+
+    // MARK: - Private
 
     private func performLoad() async {
         viewState = .loading
@@ -103,51 +176,6 @@ final class CityListViewModelImpl: CityListViewModel {
         // Below the provider's threshold this warms every row up front; above it, a no-op.
         await temperatureProvider.prefetch(repository.allCities)
     }
-
-    /// Cancels the pending timer *and* any in-flight scan, so a superseded query can never
-    /// land after a newer one.
-    func search(_ query: String) {
-        searchDebounceTask?.cancel()
-        sectionsTask?.cancel()
-
-        searchDebounceTask = Task { [weak self] in
-            do {
-                try await Task.sleep(for: Self.searchDebounce)
-                guard !Task.isCancelled else { return }
-                await self?.apply(query: query)
-            } catch {
-                // Cancelled by the next keystroke — expected, not a failure.
-            }
-        }
-    }
-
-    func toggleFavorite(_ city: City) {
-        repository.toggleFavorite(city.id)
-
-        sectionsTask?.cancel()
-        // Keeps the window, so the rows around the user's finger stay put.
-        sectionsTask = Task { [weak self] in await self?.refreshSections(resetWindow: false) }
-    }
-
-    /// Re-windows an array we already hold — no filtering, no repository call.
-    func loadMore() {
-        guard visibleCount < allOthers.count else { return }
-        visibleCount += Self.pageSize
-        emitState()
-    }
-
-    func rowAppeared(_ city: City) async {
-        guard temperatures[city.id] == nil else { return }
-        temperatures[city.id] = .loading
-
-        do {
-            temperatures[city.id] = .loaded(try await temperatureProvider.temperature(for: city))
-        } catch {
-            temperatures[city.id] = .failed
-        }
-    }
-
-    // MARK: - Private
 
     private func apply(query: String) async {
         self.query = query

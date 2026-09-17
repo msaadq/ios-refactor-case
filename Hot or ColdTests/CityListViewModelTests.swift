@@ -30,7 +30,7 @@ struct CityListViewModelTests {
         await viewModel.load()
         let before = viewModel.viewState
 
-        viewModel.search("tok")
+        viewModel.handle(.didChangeQuery("tok"))
         try await Task.sleep(for: .milliseconds(120))
         #expect(viewModel.viewState == before, "filtered before the debounce elapsed")
 
@@ -45,9 +45,9 @@ struct CityListViewModelTests {
         let viewModel = makeViewModel()
         await viewModel.load()
 
-        viewModel.search("tok")
+        viewModel.handle(.didChangeQuery("tok"))
         try await Task.sleep(for: .milliseconds(500))
-        viewModel.search("")
+        viewModel.handle(.didChangeQuery(""))
         try await Task.sleep(for: .milliseconds(500))
 
         #expect(Self.loaded(viewModel.viewState)?.others.count == StubCityDataSource.sample.count)
@@ -65,7 +65,7 @@ struct CityListViewModelTests {
         #expect(Self.loaded(viewModel.viewState)?.others.count == CityListViewModelImpl.pageSize)
         #expect(Self.loaded(viewModel.viewState)?.totalOthers == 250)
 
-        viewModel.loadMore()
+        viewModel.handle(.didReachListEnd)
 
         #expect(Self.loaded(viewModel.viewState)?.others.count == 200)
     }
