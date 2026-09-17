@@ -17,7 +17,25 @@ struct CityDetailScreen: View {
     var body: some View {
         content
             .navigationTitle(viewModel.city?.name ?? "City")
+            .toolbar { favoriteButton }
             .task { await viewModel.load() }
+    }
+
+    @ToolbarContentBuilder
+    private var favoriteButton: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            if viewModel.city != nil {
+                Button {
+                    viewModel.toggleFavorite()
+                } label: {
+                    Label(
+                        viewModel.isFavorite ? "Remove from favorites" : "Add to favorites",
+                        systemImage: viewModel.isFavorite ? "star.fill" : "star"
+                    )
+                }
+                .tint(.yellow)
+            }
+        }
     }
 
     @ViewBuilder
@@ -25,7 +43,6 @@ struct CityDetailScreen: View {
         if viewModel.city != nil {
             VStack(spacing: 32) {
                 temperature
-                favoriteButton
                 Spacer()
             }
             .frame(maxWidth: .infinity)
@@ -50,20 +67,6 @@ struct CityDetailScreen: View {
             Label("Temperature unavailable", systemImage: "exclamationmark.triangle")
                 .foregroundStyle(.secondary)
         }
-    }
-
-    private var favoriteButton: some View {
-        Button {
-            viewModel.toggleFavorite()
-        } label: {
-            Label(
-                viewModel.isFavorite ? "Remove from favorites" : "Add to favorites",
-                systemImage: viewModel.isFavorite ? "star.fill" : "star"
-            )
-            .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.borderedProminent)
-        .tint(viewModel.isFavorite ? .red : .yellow)
     }
 }
 

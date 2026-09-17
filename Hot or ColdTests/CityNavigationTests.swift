@@ -57,16 +57,25 @@ struct CityNavigationTests {
     }
 
     /// The other direction, and the reason the detail screen can depend on `FavoriteToggling`
-    /// alone: one owner, so a star flipped here is the same state the list partitions on.
-    @Test("Favoriting from the detail screen is visible to the list")
-    func detailToggleWritesThroughToTheList() async throws {
+    /// alone. Re-sectioning matters as much as the flag: rows repaint from the observed
+    /// repository on their own, but the favorites/others split lives in `viewState`, so a city
+    /// would otherwise read as favorited while still sitting under "All cities".
+    @Test("Favoriting from the detail screen re-sections the list on return")
+    func detailFavoriteReachesTheListOnReturn() async throws {
         let (coordinator, repository) = makeCoordinator()
         let list = coordinator.makeListViewModel()
         await list.load()
         let paris = try #require(repository.city(id: CityID("paris-fr")))
 
         coordinator.makeDetailViewModel(for: paris.id).toggleFavorite()
+        await list.load() // what `.task` does when the detail screen pops
 
         #expect(list.isFavorite(paris))
+        guard case .loaded(let favorites, let others, _) = list.viewState else {
+            Issue.record("expected .loaded, got \(list.viewState)")
+            return
+        }
+        #expect(favorites.map(\.id) == [paris.id])
+        #expect(!others.contains { $0.id == paris.id })
     }
 }

@@ -66,6 +66,9 @@ final class CityListViewModelImpl: CityListViewModel {
     private var allOthers: [City] = []
     private var visibleCount = CityListViewModelImpl.pageSize
     private var hasLoaded = false
+    /// The favorites the current sections were partitioned against, so a return from the
+    /// detail screen can tell "nothing changed" from "re-partition me" without re-scanning.
+    private var partitionedFavorites: [CityID] = []
 
     @ObservationIgnored private let repository: CityRepository
     @ObservationIgnored private let temperatureProvider: TemperatureProviding
@@ -103,7 +106,13 @@ final class CityListViewModelImpl: CityListViewModel {
     }
 
     func load() async {
-        guard !hasLoaded else { return }
+        guard !hasLoaded else {
+            // `.task` refires when the detail screen pops, and a star flipped there moves a
+            // city between sections. An array compare, so an unchanged return still costs nothing.
+            guard repository.favorites != partitionedFavorites else { return }
+            await refreshSections(resetWindow: false)
+            return
+        }
         await performLoad()
     }
 
@@ -192,6 +201,8 @@ final class CityListViewModelImpl: CityListViewModel {
 
     /// `resetWindow` is false when the catalogue is only re-partitioned, not re-queried.
     private func refreshSections(resetWindow: Bool = true) async {
+        // Read before the scan, which partitions against the same snapshot.
+        let scannedFavorites = repository.favorites
         let sections: CityRepository.Sections
         do {
             sections = try await repository.sections(matching: query)
@@ -205,6 +216,7 @@ final class CityListViewModelImpl: CityListViewModel {
 
         allFavorites = sections.favorites
         allOthers = sections.others
+        partitionedFavorites = scannedFavorites
         if resetWindow { visibleCount = Self.pageSize }
         emitState()
     }
